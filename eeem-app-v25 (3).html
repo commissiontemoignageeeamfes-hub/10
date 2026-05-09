@@ -1619,7 +1619,7 @@ body .animate, body .spinner, body [class*="anim"] {
     <button class="tabtop" onclick="switchTab('equipes',this)">🗺️ Zones</button>
     <button class="tabtop" onclick="switchTab('sorties',this)">🚶 Sorties</button>
     <button class="tabtop" onclick="switchTab('evangelistes',this)">👥 Évangélistes</button>
-    <button class="tabtop" id="tab-btn-carto" onclick="switchTab('cartographie',this);initCarto();setTimeout(function(){if(cartoMap)cartoMap.invalidateSize();},300);setTimeout(function(){if(cartoMap)cartoMap.invalidateSize();},600)">🗺️ Cartographie</button>
+    <button class="tabtop" id="tab-btn-carto" onclick="switchTab('cartographie',this)">🗺️ Cartographie</button>
   </div>
 
   <div class="page-content" style="padding-top:104px; max-width:960px; margin:0 auto; padding-left:14px; padding-right:14px; padding-bottom:60px;">
@@ -1797,7 +1797,7 @@ body .animate, body .spinner, body [class*="anim"] {
       <div class="card" style="padding:0;overflow:hidden;margin-bottom:14px;">
         <div style="padding:10px 14px;background:linear-gradient(135deg,var(--c1),var(--c2));color:#fff;display:flex;align-items:center;justify-content:space-between;">
           <div style="font-size:13px;font-weight:700;">🗺️ Carte des zones — Fès &nbsp;<span style="font-size:10px;background:rgba(255,255,255,0.2);border-radius:20px;padding:2px 7px;font-family:'DM Sans',sans-serif;font-weight:600;">🔴 En direct</span></div>
-          <button onclick="switchTab('cartographie',document.querySelector('[onclick*=cartographie]'));initCarto();setTimeout(function(){if(cartoMap)cartoMap.invalidateSize();},300);setTimeout(function(){if(cartoMap)cartoMap.invalidateSize();},600);" style="background:rgba(255,255,255,0.18);border:none;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;color:#fff;cursor:pointer;">Agrandir →</button>
+          <button onclick="switchTab('cartographie',document.querySelector('[onclick*=cartographie]'));" style="background:rgba(255,255,255,0.18);border:none;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;color:#fff;cursor:pointer;">Agrandir →</button>
         </div>
         <!-- Légende compacte -->
         <div style="display:flex;gap:10px;flex-wrap:wrap;padding:7px 14px;background:var(--surface);border-bottom:1px solid var(--bo);font-size:11px;">
@@ -2044,7 +2044,7 @@ body .animate, body .spinner, body [class*="anim"] {
       </div>
 
       <!-- Carte -->
-      <div class="card" style="padding:0;overflow:hidden;margin-bottom:14px;">
+      <div class="card" style="padding:0;overflow:visible;margin-bottom:14px;">
         <div id="carto-map" style="height:420px;width:100%;border-radius:var(--r);"></div>
       </div>
 
@@ -2599,35 +2599,38 @@ var cartoStaticLayers = [];
 var cartoInitialized = false;
 
 function initCarto() {
-  if (cartoInitialized) { updateCartoMap(); setTimeout(function(){ if(cartoMap) cartoMap.invalidateSize(); }, 50); return; }
   var el = document.getElementById('carto-map');
   if (!el) return;
-  // Rendre le conteneur temporairement visible pour que Leaflet calcule les dimensions
-  var tab = document.getElementById('tab-cartographie');
-  var wasHidden = tab && tab.style.display === 'none' || (tab && !tab.classList.contains('on'));
-  if (tab && wasHidden) {
-    tab.style.visibility = 'hidden';
-    tab.style.display = 'block';
-    tab.style.position = 'absolute';
-    tab.style.pointerEvents = 'none';
+  if (cartoInitialized) {
+    cartoMap.invalidateSize();
+    updateCartoMap();
+    return;
   }
+  // Forcer les dimensions avant init Leaflet
   el.style.height = '420px';
   el.style.width = '100%';
+  el.style.display = 'block';
+  // Petit délai pour que le DOM applique les styles
   setTimeout(function() {
-    cartoMap = _buildMap('carto-map', 13);
-    cartoStaticLayers = _drawStaticLayers(cartoMap);
-    cartoInitialized = true;
-    // Restaurer le tab
-    if (tab && wasHidden) {
-      tab.style.visibility = '';
-      tab.style.display = '';
-      tab.style.position = '';
-      tab.style.pointerEvents = '';
-    }
-    if (S.fiches && S.fiches.length) updateCartoMap();
-    setTimeout(function(){ if(cartoMap) { cartoMap.invalidateSize(); if(S.fiches&&S.fiches.length) updateCartoMap(); } }, 200);
-    setTimeout(function(){ if(cartoMap) cartoMap.invalidateSize(); }, 600);
-  }, 50);
+    try {
+      cartoMap = L.map('carto-map', {
+        zoomControl: true,
+        scrollWheelZoom: true,
+        preferCanvas: true
+      }).setView([34.028, -5.003], 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19,
+        crossOrigin: true
+      }).addTo(cartoMap);
+      cartoStaticLayers = _drawStaticLayers(cartoMap);
+      cartoInitialized = true;
+      cartoMap.invalidateSize();
+      if (S.fiches && S.fiches.length) updateCartoMap();
+      setTimeout(function(){ cartoMap.invalidateSize(); updateCartoMap(); }, 300);
+      setTimeout(function(){ cartoMap.invalidateSize(); }, 800);
+    } catch(e) { console.error('initCarto error:', e); }
+  }, 100);
 }
 
 /* ═══════════════════════════════════════════
@@ -2639,33 +2642,36 @@ var zoneMapStaticLayers = [];
 var zoneMapInitialized = false;
 
 function initZoneMap() {
-  if (zoneMapInitialized) { updateZoneMap(); setTimeout(function(){ if(zoneMap) zoneMap.invalidateSize(); }, 50); return; }
   var el = document.getElementById('zone-mini-map');
   if (!el) return;
-  var tab = document.getElementById('tab-equipes');
-  var wasHidden = tab && (!tab.classList.contains('on') || tab.style.display === 'none');
-  if (tab && wasHidden) {
-    tab.style.visibility = 'hidden';
-    tab.style.display = 'block';
-    tab.style.position = 'absolute';
-    tab.style.pointerEvents = 'none';
+  if (zoneMapInitialized) {
+    zoneMap.invalidateSize();
+    updateZoneMap();
+    return;
   }
   el.style.height = '320px';
   el.style.width = '100%';
+  el.style.display = 'block';
   setTimeout(function() {
-    zoneMap = _buildMap('zone-mini-map', 13);
-    zoneMapStaticLayers = _drawStaticLayers(zoneMap);
-    zoneMapInitialized = true;
-    if (tab && wasHidden) {
-      tab.style.visibility = '';
-      tab.style.display = '';
-      tab.style.position = '';
-      tab.style.pointerEvents = '';
-    }
-    if (S.fiches && S.fiches.length) updateZoneMap();
-    setTimeout(function(){ if(zoneMap) { zoneMap.invalidateSize(); if(S.fiches&&S.fiches.length) updateZoneMap(); } }, 200);
-    setTimeout(function(){ if(zoneMap) zoneMap.invalidateSize(); }, 600);
-  }, 50);
+    try {
+      zoneMap = L.map('zone-mini-map', {
+        zoomControl: true,
+        scrollWheelZoom: false,
+        preferCanvas: true
+      }).setView([34.028, -5.003], 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19,
+        crossOrigin: true
+      }).addTo(zoneMap);
+      zoneMapStaticLayers = _drawStaticLayers(zoneMap);
+      zoneMapInitialized = true;
+      zoneMap.invalidateSize();
+      if (S.fiches && S.fiches.length) updateZoneMap();
+      setTimeout(function(){ zoneMap.invalidateSize(); updateZoneMap(); }, 300);
+      setTimeout(function(){ zoneMap.invalidateSize(); }, 800);
+    } catch(e) { console.error('initZoneMap error:', e); }
+  }, 100);
 }
 
 function updateZoneMap() {
@@ -5539,7 +5545,23 @@ function switchTab(name, btn) {
     const badge = document.getElementById('notif-badge');
     if (badge) badge.style.display = 'none';
   }
-  if (name === 'equipes') { renderEquipes(); renderZoneChips(); initZoneMap(); setTimeout(function(){ if(zoneMap) zoneMap.invalidateSize(); }, 350); setTimeout(function(){ if(zoneMap) zoneMap.invalidateSize(); }, 700); }
+  if (name === 'equipes') {
+    renderEquipes(); renderZoneChips();
+    // Tab est maintenant visible — init ou refresh la mini-carte
+    setTimeout(function() {
+      initZoneMap();
+      setTimeout(function(){ if(zoneMap) zoneMap.invalidateSize(); }, 200);
+      setTimeout(function(){ if(zoneMap) { zoneMap.invalidateSize(); updateZoneMap(); } }, 600);
+    }, 50);
+  }
+  if (name === 'cartographie') {
+    // Tab est maintenant visible — init ou refresh la grande carte
+    setTimeout(function() {
+      initCarto();
+      setTimeout(function(){ if(cartoMap) cartoMap.invalidateSize(); }, 200);
+      setTimeout(function(){ if(cartoMap) { cartoMap.invalidateSize(); updateCartoMap(); } }, 600);
+    }, 50);
+  }
   if (name === 'sorties') { initSorties(); populateSortieEvWrap(); }
 }
 
@@ -7053,12 +7075,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Écran par défaut : formulaire public
     showScreen('form');
   }
-  // Pré-initialiser les cartes Leaflet en arrière-plan (évite le bug display:none)
-  setTimeout(function() {
-    initCarto();
-    setTimeout(initZoneMap, 200);
-  }, 800);
-
   // Date du jour par défaut
   const dateEl = document.getElementById('f-date');
   if (dateEl) dateEl.value = new Date().toISOString().split('T')[0];
